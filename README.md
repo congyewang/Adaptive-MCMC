@@ -1,5 +1,12 @@
 # Adaptive-MCMC
+
 Adaptive Markov Chain Monte Carlo (MCMC) algorithms
+
+## Install
+
+```{bash}
+pip install adaptive-mcmc
+```
 
 ## Examples
 
