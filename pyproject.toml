@@ -1,0 +1,15 @@
+[project]
+name = "Adaptive-MCMC"
+version = "0.1.0"
+description = "Adaptive Markov Chain Monte Carlo (MCMC) algorithms"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.2.5",
+    "pytest>=8.3.5",
+]
+
+[dependency-groups]
+dev = [
+    "scipy>=1.15.3",
+]
