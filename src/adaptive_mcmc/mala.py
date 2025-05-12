@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Iterable, Tuple
+from typing import Callable, Iterable, Optional, Tuple
 
 import numpy as np
 from numpy import typing as npt
@@ -185,3 +185,92 @@ class ESJDMALA(MALAInterface):
         acc_rate = self.accepted / (n_samples * thin)
 
         return samples, acc_rate, eps_traj, esjd_traj
+
+
+class PrecondESJDMALA(ESJDMALA):
+    def __init__(
+        self,
+        log_target_pdf: Callable[
+            [Iterable[float] | npt.NDArray[np.floating]], float | np.floating
+        ],
+        grad_target_pdf: Callable[
+            [Iterable[float] | npt.NDArray[np.floating]],
+            Iterable[float] | npt.NDArray[np.floating],
+        ],
+        initial_sample: npt.NDArray[np.floating],
+        initial_covariance: Optional[npt.NDArray[np.floating]] = None,
+        eps0: float = 0.1,
+        window: int = 100,
+        eta: float = 0.05,
+        adapt_steps: int = 5_000,
+        eps_min: float = 1e-4,
+        eps_max: float = 2.0,
+        random_seed: int = 42,
+    ) -> None:
+        """
+        Initializes the PrecondESJDMALA sampler.
+        This class implements the ESJD-maximizing adaptive MALA algorithm with preconditioning.
+        The preconditioner is defined by the initial covariance matrix.
+
+        Args:
+            log_target_pdf (Callable[ [Iterable[float]  |  npt.NDArray[np.floating]], float  |  np.floating ]): Log target probability density function.
+            grad_target_pdf (Callable[ [Iterable[float]  |  npt.NDArray[np.floating]], Iterable[float]  |  npt.NDArray[np.floating], ]): Gradient of the log target probability density function.
+            initial_sample (npt.NDArray[np.floating]): Initial sample point.
+            initial_covariance (Optional[npt.NDArray[np.floating]], optional): Initial covariance matrix. Defaults to None.
+            eps0 (float, optional): Initial step size. Defaults to 0.1.
+            window (int, optional): Window size for adaptive step size. Defaults to 100.
+            eta (float, optional): Step size adaptation rate. Defaults to 0.05.
+            adapt_steps (int, optional): Number of adaptation steps. Defaults to 5_000.
+            eps_min (float, optional): Minimum step size. Defaults to 1e-4.
+            eps_max (float, optional): Maximum step size. Defaults to 2.0.
+            random_seed (int, optional): Random seed for reproducibility. Defaults to 42.
+        """
+        super().__init__(
+            log_target_pdf=log_target_pdf,
+            grad_target_pdf=grad_target_pdf,
+            initial_sample=initial_sample,
+            eps0=eps0,
+            window=window,
+            eta=eta,
+            adapt_steps=adapt_steps,
+            eps_min=eps_min,
+            eps_max=eps_max,
+            random_seed=random_seed,
+        )
+        self.initial_covariance = (
+            np.eye(self.dim)
+            if initial_covariance is None
+            else np.asarray(initial_covariance)
+        )
+        self.L = np.linalg.cholesky(self.initial_covariance)
+        self.initial_covariance_inv = np.linalg.inv(self.initial_covariance)
+
+    def _proposal(
+        self, x: npt.NDArray[np.floating]
+    ) -> Tuple[npt.NDArray[np.floating], float]:
+        """
+        Proposes a new sample point using the MALA proposal distribution with preconditioning.
+
+        Args:
+            x (npt.NDArray[np.floating]): Current sample point.
+
+        Returns:
+            Tuple[npt.NDArray[np.floating], float]: Proposed sample point and acceptance probability.
+        """
+        g = self.grad_logp(x)
+        mu_x = x + 0.5 * self.eps**2 * self.initial_covariance @ g
+        noise = self.rng.normal(size=self.dim)
+        y = mu_x + self.eps * self.L @ noise
+
+        def log_q(a, b, grad_a):
+            mu = a + 0.5 * self.eps**2 * self.initial_covariance @ grad_a
+            diff = b - mu
+            return -0.5 / self.eps**2 * diff.T @ self.initial_covariance_inv @ diff
+
+        log_alpha = (
+            self.logp(y)
+            - self.logp(x)
+            + log_q(y, x, self.grad_logp(y))
+            - log_q(x, y, g)
+        )
+        return y, min(1.0, np.exp(log_alpha))

@@ -31,4 +31,8 @@ def grad_logp(x):
 mala = ESJDMALA(logp, grad_logp, initial_sample=np.zeros(dim), eps0=0.5)
 samples, acc, eps_hist, esjd_hist = mala.run(20_000)
 print(f"Acceptance: {acc:.3f}, Final epsilon = {eps_hist[-1]:.4f}")
+
+pmala = PrecondESJDMALA(logp, grad_logp, initial_sample=np.zeros(dim), initial_covariance=np.eye(dim), eps0=0.5)
+samples, acc, eps_hist, esjd_hist = pmala.run(20_000)
+print(f"Acceptance: {acc:.3f}, Final epsilon = {eps_hist[-1]:.4f}")
 ```
