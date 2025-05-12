@@ -3,6 +3,7 @@ from typing import Callable, Iterable, Tuple
 
 import numpy as np
 from numpy import typing as npt
+from tqdm.auto import trange
 
 
 class MALAInterface(ABC):
@@ -61,7 +62,7 @@ class ESJDMALA(MALAInterface):
         adapt_steps: int = 5_000,
         eps_min: float = 1e-4,
         eps_max: float = 2.0,
-        random_seed: int = 1234,
+        random_seed: int = 42,
     ) -> None:
         """
         Initializes the ESJDMALA sampler.
@@ -71,13 +72,13 @@ class ESJDMALA(MALAInterface):
             log_target_pdf (Callable[Iterable[float] | npt.NDArray[np.floating], float | np.floating]): Log target probability density function.
             grad_target_pdf (Callable[Iterable[float] | npt.NDArray[np.floating], Iterable[float] | npt.NDArray[np.floating]]): Gradient of the log target probability density function.
             initial_sample (npt.NDArray[np.floating]): Initial sample point.
-            eps0 (float): Initial step size.
-            window (int): Window size for adaptive step size.
-            eta (float): Learning rate for adaptive step size.
-            adapt_steps (int): Number of adaptation steps.
-            eps_min (float): Minimum step size.
-            eps_max (float): Maximum step size.
-            random_state (np.random.Generator | None): Random number generator.
+            eps0 (float): Initial step size. Default is 0.1.
+            window (int): Window size for adaptive step size. Default is 100.
+            eta (float): Learning rate for adaptive step size. Default is 0.05.
+            adapt_steps (int): Number of adaptation steps. Default is 5,000.
+            eps_min (float): Minimum step size. Default is 1e-4.
+            eps_max (float): Maximum step size. Default is 2.0.
+            random_seed (int): Random seed for reproducibility. Default is 42.
         """
         self.logp = log_target_pdf
         self.grad_logp = grad_target_pdf
@@ -155,7 +156,7 @@ class ESJDMALA(MALAInterface):
 
         return self.x, delta, self.eps
 
-    def run(self, n_samples: int, thin: int = 1) -> Tuple[
+    def run(self, n_samples: int, thin: int = 1, verbose: bool = True) -> Tuple[
         npt.NDArray[np.floating],
         float,
         npt.NDArray[np.floating],
@@ -166,7 +167,8 @@ class ESJDMALA(MALAInterface):
 
         Args:
             n_samples (int): Number of samples to generate.
-            thin (int): Thinning interval.
+            thin (int): Thinning interval. Default is 1.
+            verbose (bool): Whether to show progress bar. Default is True.
 
         Returns:
             Tuple[npt.NDArray[np.floating], float, npt.NDArray[np.floating], npt.NDArray[np.floating]]: Generated samples, acceptance rate, ESJD trajectory, and step size trajectory.
@@ -174,7 +176,7 @@ class ESJDMALA(MALAInterface):
         samples = np.empty((n_samples, self.dim))
         eps_traj = np.empty(n_samples)
         esjd_traj = np.empty(n_samples)
-        for i in range(n_samples):
+        for i in trange(n_samples, disable=not verbose):
             for _ in range(thin):
                 x, delta, eps_now = self.step()
             samples[i] = x
